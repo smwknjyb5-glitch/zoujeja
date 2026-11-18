@@ -1,0 +1,110 @@
+ <!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>لعبة كسر الزجاجة</title>
+<style>
+:root{--bg:#0f1b3d;--fg:#f5e6b3;--gold:#e8b84a;--card:#1a2a5e}
+@media (prefers-color-scheme: dark){:root{--bg:#0f1b3d;--fg:#f5e6b3}}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font-family:system-ui,"Segoe UI",Tahoma,sans-serif;display:flex;flex-direction:column;align-items:center;padding:env(safe-area-inset-top,0px) 8px env(safe-area-inset-bottom,0px);touch-action:none;user-select:none}
+header{display:flex;gap:10px;justify-content:space-between;width:100%;max-width:420px;padding:8px 4px;font-weight:700}
+header span{background:var(--card);border:1px solid var(--gold);border-radius:10px;padding:4px 10px;font-size:15px}
+.wrap{position:relative;width:100%;max-width:420px;flex:0 1 auto}
+canvas{width:100%;height:auto;max-height:calc(100vh - 110px);aspect-ratio:2/3;border-radius:14px;border:2px solid var(--gold);display:block;background:#16275a;touch-action:none}
+#ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(10,16,40,.82);border-radius:14px;text-align:center;padding:20px}
+#ov h2{margin:0;color:var(--gold)}
+#ov p{margin:0;line-height:1.7}
+button{background:var(--gold);color:#1a1a1a;border:0;border-radius:12px;padding:10px 28px;font-size:18px;font-weight:700;cursor:pointer}
+.hint{font-size:13px;opacity:.8;padding:6px;text-align:center}
+</style>
+</head>
+<body>
+<header><span>النقاط: <b id="sc">0</b></span><span>المستوى: <b id="lv">1</b></span><span>الكرات: <b id="bl">6</b></span></header>
+<div class="wrap">
+<canvas id="c" width="400" height="600"></canvas>
+<div id="ov"><h2>🍾 لعبة كسر الزجاجة</h2><p>حرّك إصبعك (أو الفأرة) لتحديد موضع الكرة في الأعلى،<br>ثم ارفع إصبعك (أو انقر) لإسقاطها وكسر الزجاجة المتحركة.</p><button id="go">ابدأ</button></div>
+</div>
+<div class="hint">كل زجاجة تُكسر تمنحك كرة إضافية وتزيد السرعة</div>
+<script>
+const cv=document.getElementById('c'),ctx=cv.getContext('2d'),W=400,H=600,SH=500;
+const $=id=>document.getElementById(id);
+let score,level,balls,bottle,ball,state,shards,aimX,msg,msgT,bounces,wait,best=0;
+function reset(){score=0;level=1;balls=6;shards=[];aimX=W/2;ball=null;state='aim';msg='';msgT=0;newBottle();ui()}
+function newBottle(){bottle={x:80+Math.random()*240,d:Math.random()<.5?-1:1,broken:false}}
+function speed(){return 1.4+level*.45}
+function ui(){$('sc').textContent=score;$('lv').textContent=level;$('bl').textContent=balls}
+function px(e){const r=cv.getBoundingClientRect();return Math.max(16,Math.min(W-16,(e.clientX-r.left)*W/r.width))}
+cv.addEventListener('pointerdown',e=>{if(state==='aim')aimX=px(e)});
+cv.addEventListener('pointermove',e=>{if(state==='aim')aimX=px(e)});
+cv.addEventListener('pointerup',e=>{if(state==='aim'&&!$('ov').offsetParent){aimX=px(e);drop()}});
+function drop(){ball={x:aimX,y:50,vy:0,r:14};bounces=0;state='fall';balls--;ui()}
+function hit(){
+ const b=bottle,r=ball.r;
+ const t=[[b.x-20,SH-80,40,80],[b.x-9,SH-118,18,40]];
+ for(const [x,y,w,h] of t){
+  const cx=Math.max(x,Math.min(ball.x,x+w)),cy=Math.max(y,Math.min(ball.y,y+h));
+  if((ball.x-cx)**2+(ball.y-cy)**2<r*r)return true}
+ return false}
+function smash(){
+ bottle.broken=true;
+ for(let i=0;i<34;i++){const a=Math.random()*Math.PI*2,s=1+Math.random()*5;
+  shards.push({x:bottle.x+(Math.random()-.5)*30,y:SH-20-Math.random()*90,vx:Math.cos(a)*s,vy:Math.sin(a)*s-3,rot:Math.random()*6,vr:(Math.random()-.5)*.4,sz:4+Math.random()*9,life:1})}
+ score+=10*level;balls++;level++;msg='تحطّمت! +'+10*(level-1);msgT=70;ui();
+ ball=null;state='wait';wait=60}
+function end(){state='over';$('ov').innerHTML='<h2>انتهت اللعبة</h2><p>نقاطك: '+score+'<br>أفضل نتيجة: '+Math.max(best,score)+'</p><button id="go2">العب من جديد</button>';best=Math.max(best,score);$('ov').style.display='flex';$('go2').onclick=()=>{$('ov').style.display='none';reset()}}
+function step(){
+ // bottle
+ if(!bottle.broken){bottle.x+=bottle.d*speed();if(bottle.x<40){bottle.x=40;bottle.d=1}if(bottle.x>W-40){bottle.x=W-40;bottle.d=-1}}
+ if(state==='fall'){
+  ball.vy+=.45;ball.y+=ball.vy;
+  if(!bottle.broken&&hit())smash();
+  else if(ball.y>SH-ball.r){ball.y=SH-ball.r;ball.vy*=-.45;bounces++;if(bounces>=3||Math.abs(ball.vy)<2){ball.x+=0;state='wait';wait=35;msg='أخطأت!';msgT=40;}}
+ }
+ if(state==='wait'){wait--;
+  if(wait<=0){ball=null;if(bottle.broken){newBottle();state='aim'}else if(balls<=0)end();else state='aim'}}
+ if(state==='wait'&&ball&&ball.y<SH){}
+ shards.forEach(s=>{s.vy+=.3;s.x+=s.vx;s.y+=s.vy;s.rot+=s.vr;if(s.y>SH-2){s.y=SH-2;s.vy*=-.3;s.vx*=.7}s.life-=.006});
+ shards=shards.filter(s=>s.life>0);
+ if(msgT>0)msgT--;
+}
+function drawBottle(){
+ const b=bottle;if(b.broken)return;const x=b.x;
+ ctx.save();
+ ctx.fillStyle='rgba(60,190,110,.85)';ctx.strokeStyle='#bff5d2';ctx.lineWidth=2;
+ ctx.beginPath();ctx.roundRect(x-20,SH-80,40,80,8);ctx.fill();ctx.stroke();
+ ctx.beginPath();ctx.roundRect(x-9,SH-118,18,42,4);ctx.fill();ctx.stroke();
+ ctx.fillStyle='#e8b84a';ctx.fillRect(x-11,SH-124,22,8);
+ ctx.fillStyle='#f5e6b3';ctx.fillRect(x-20,SH-58,40,26);
+ ctx.fillStyle='rgba(255,255,255,.35)';ctx.fillRect(x-14,SH-76,5,60);
+ ctx.restore()}
+function draw(){
+ ctx.clearRect(0,0,W,H);
+ // stars
+ ctx.fillStyle='rgba(245,230,179,.5)';
+ for(let i=0;i<30;i++)ctx.fillRect((i*97)%W,(i*53)%380,1.6,1.6);
+ // rail at top
+ ctx.fillStyle='#2a3b7a';ctx.fillRect(0,28,W,6);
+ // shelf
+ ctx.fillStyle='#8a5a2b';ctx.fillRect(0,SH,W,16);ctx.fillStyle='#6b4420';ctx.fillRect(0,SH+16,W,H-SH-16);
+ ctx.fillStyle='#a8743c';ctx.fillRect(0,SH,W,4);
+ drawBottle();
+ // ball
+ const bx=state==='aim'?aimX:(ball?ball.x:0),by=state==='aim'?50:(ball?ball.y:0);
+ if(state==='aim'||ball){
+  if(state==='aim'){ctx.strokeStyle='rgba(245,230,179,.35)';ctx.setLineDash([5,6]);ctx.beginPath();ctx.moveTo(bx,64);ctx.lineTo(bx,SH);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#e8b84a';ctx.fillRect(bx-3,34,6,16)}
+  const g=ctx.createRadialGradient(bx-4,by-4,2,bx,by,14);g.addColorStop(0,'#ff9a8a');g.addColorStop(1,'#c0262d');
+  ctx.fillStyle=g;ctx.beginPath();ctx.arc(bx,by,14,0,7);ctx.fill()}
+ // shards
+ shards.forEach(s=>{ctx.save();ctx.globalAlpha=Math.max(0,s.life);ctx.translate(s.x,s.y);ctx.rotate(s.rot);
+  ctx.fillStyle='rgba(120,230,160,.9)';ctx.beginPath();ctx.moveTo(-s.sz/2,s.sz/2);ctx.lineTo(s.sz/2,s.sz/3);ctx.lineTo(0,-s.sz/2);ctx.closePath();ctx.fill();ctx.restore()});
+ if(msgT>0){ctx.globalAlpha=Math.min(1,msgT/20);ctx.fillStyle='#e8b84a';ctx.font='bold 28px system-ui';ctx.textAlign='center';ctx.fillText(msg,W/2,260);ctx.globalAlpha=1}
+}
+function loop(){if(state!=='over'&&!$('ov').offsetParent)step();draw();requestAnimationFrame(loop)}
+$('go').onclick=()=>{$('ov').style.display='none'};
+reset();loop();
+</script>
+</body>
+</html>
